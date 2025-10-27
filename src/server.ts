@@ -13,6 +13,10 @@ import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import easypayRoutes from './routes/easypay.js';
+import applicationsRoutes from './routes/applications.js';
+import geckosRoutes from './routes/geckos.js';
+import categoriesRoutes from './routes/categories.js';
+import settingsRoutes from './routes/settings.js';
 
 // Import database initialization
 import { initializeDatabase } from './database/init.js';
@@ -68,12 +72,12 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
     // Allow all localhost ports for development
     if (origin.match(/^http:\/\/localhost:\d+$/)) {
       return callback(null, true);
     }
-    
+
     // Allow specific production domains
     const allowedOrigins = [
       process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -84,13 +88,15 @@ app.use(cors({
       'http://localhost:3017',
       'http://localhost:3018',
       'http://localhost:3019',
-      'http://localhost:3020'
+      'http://localhost:3020',
+      'http://localhost:5173',
+      'http://localhost:5174'
     ];
-    
+
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    
+
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
@@ -107,8 +113,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
@@ -118,6 +124,10 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/easypay', easypayRoutes);
+app.use('/api/applications', applicationsRoutes);
+app.use('/api/geckos', geckosRoutes);
+app.use('/api/categories', categoriesRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Serve static files (for EasyPay data)
 app.use('/data', express.static(path.join(__dirname, '../data')));
@@ -179,7 +189,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 
   // Don't leak error details in production
   const isDevelopment = process.env.NODE_ENV === 'development';
-  
+
   res.status(statusCode).json({
     error: message,
     message: isDevelopment ? err.message : undefined,
@@ -203,7 +213,7 @@ async function startServer() {
   try {
     await initializeDatabase();
     console.log('Database initialized successfully');
-    
+
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
