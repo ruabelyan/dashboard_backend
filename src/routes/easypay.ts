@@ -465,7 +465,7 @@ router.post('/clients', authenticateToken, validateRequest(easypayClientSchema),
         clientData.open_date, clientData.is_verified, clientData.ordered_registration,
         clientData.verification_date, clientData.registration_type
       ],
-      function(err) {
+      function (err) {
         if (err) {
           console.error('Client creation error:', err);
           return res.status(500).json({ error: 'Client creation failed' });
@@ -557,7 +557,7 @@ router.put('/clients/:id', authenticateToken, validateRequest(easypayClientSchem
         clientData.open_date, clientData.is_verified, clientData.ordered_registration,
         clientData.verification_date, clientData.registration_type, clientId
       ],
-      function(err) {
+      function (err) {
         if (err) {
           console.error('Client update error:', err);
           return res.status(500).json({ error: 'Client update failed' });
@@ -607,7 +607,7 @@ router.put('/clients/:id', authenticateToken, validateRequest(easypayClientSchem
 router.delete('/clients/:id', authenticateToken, (req, res) => {
   const clientId = parseInt(req.params.id);
 
-  db.run('DELETE FROM easypay_clients WHERE id = ?', [clientId], function(err) {
+  db.run('DELETE FROM easypay_clients WHERE id = ?', [clientId], function (err) {
     if (err) {
       console.error('Database error:', err);
       return res.status(500).json({ error: 'Database error' });
@@ -703,8 +703,8 @@ router.post('/import', authenticateToken, async (req: AuthRequest, res) => {
     });
   } catch (error) {
     console.error('Import error:', error);
-    res.status(500).json({ 
-      error: 'Import failed', 
+    res.status(500).json({
+      error: 'Import failed',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
@@ -718,7 +718,7 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-        file.mimetype === 'application/vnd.ms-excel') {
+      file.mimetype === 'application/vnd.ms-excel') {
       cb(null, true);
     } else {
       cb(new Error('Only Excel files are allowed'));
@@ -770,7 +770,7 @@ const upload = multer({
  *       500:
  *         description: Internal server error
  */
-router.post('/import-excel', authenticateToken, upload.single('file'), async (req: AuthRequest, res) => {
+router.post('/import-excel', authenticateToken, upload.single('file') as any, async (req: AuthRequest, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -796,10 +796,10 @@ router.post('/import-excel', authenticateToken, upload.single('file'), async (re
     const emailIndex = headers.findIndex(h => h.toLowerCase() === 'email');
     const phoneIndex = headers.findIndex(h => h.toLowerCase() === 'phone');
 
-    if (clientIdIndex === -1 || displayNameIndex === -1 || firstNameIndex === -1 || 
-        lastNameIndex === -1 || emailIndex === -1 || phoneIndex === -1) {
-      return res.status(400).json({ 
-        error: 'Excel file must contain "Client ID", "Display Name", "First Name", "Last Name", "Email", and "Phone" columns' 
+    if (clientIdIndex === -1 || displayNameIndex === -1 || firstNameIndex === -1 ||
+      lastNameIndex === -1 || emailIndex === -1 || phoneIndex === -1) {
+      return res.status(400).json({
+        error: 'Excel file must contain "Client ID", "Display Name", "First Name", "Last Name", "Email", and "Phone" columns'
       });
     }
 
@@ -809,7 +809,7 @@ router.post('/import-excel', authenticateToken, upload.single('file'), async (re
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i] as any[];
-      
+
       // Skip empty rows
       if (!row[clientIdIndex] && !row[displayNameIndex]) {
         continue;
@@ -931,11 +931,11 @@ router.post('/import-excel', authenticateToken, upload.single('file'), async (re
           const fields = Object.keys(client);
           const placeholders = fields.map(() => '?').join(', ');
           const values = Object.values(client);
-          
+
           db.run(
             `INSERT INTO easypay_clients (${fields.join(', ')}) VALUES (${placeholders})`,
             values,
-            function(err) {
+            function (err) {
               if (err) reject(err);
               else resolve(this);
             }

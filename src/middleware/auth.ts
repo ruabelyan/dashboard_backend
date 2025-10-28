@@ -11,9 +11,9 @@ export interface AuthRequest extends Request {
 }
 
 export const generateToken = (payload: any): string => {
-  return jwt.sign(payload, process.env.JWT_SECRET || 'fallback-secret', {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
-  });
+  const secret = process.env.JWT_SECRET || 'fallback-secret';
+  const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
+  return jwt.sign(payload, secret, { expiresIn } as any);
 };
 
 export const verifyToken = (token: string): any => {

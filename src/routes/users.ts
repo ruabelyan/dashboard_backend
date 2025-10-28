@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Response } from 'express';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
@@ -504,7 +504,7 @@ router.put('/:id', authenticateToken, requireAdmin, validateRequest(userUpdateSc
  *       401:
  *         description: Unauthorized
  */
-router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, (req: AuthRequest, res) => {
   const userId = parseInt(req.params.id);
 
   // Prevent admin from deleting themselves
@@ -512,14 +512,16 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Cannot delete your own account' });
   }
 
-  db.run('DELETE FROM users WHERE id = ?', [userId], function (err) {
+  db.run('DELETE FROM users WHERE id = ?', [userId], function (err: any) {
     if (err) {
       console.error('Database error:', err);
-      return res.status(500).json({ error: 'Database error' });
+      res.status(500).json({ error: 'Database error' });
+      return;
     }
 
     if (this.changes === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'User not found' });
+      return;
     }
 
     res.json({ message: 'User deleted successfully' });
@@ -586,7 +588,7 @@ const upload = multer({
  *       500:
  *         description: Internal server error
  */
-router.post('/import-excel', authenticateToken, requireAdmin, upload.single('file'), async (req: AuthRequest, res) => {
+router.post('/import-excel', authenticateToken, requireAdmin, upload.single('file') as any, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -686,7 +688,7 @@ router.post('/import-excel', authenticateToken, requireAdmin, upload.single('fil
           );
         });
         importedCount++;
-      } catch (error) {
+      } catch (error: any) {
         errors.push(`Failed to import user ${user.name}: ${error}`);
       }
     }
@@ -698,7 +700,7 @@ router.post('/import-excel', authenticateToken, requireAdmin, upload.single('fil
       duplicates,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Excel import error:', error);
     res.status(500).json({ error: 'Failed to process Excel file' });
   }
