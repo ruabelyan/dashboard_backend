@@ -126,6 +126,7 @@ export async function initializeDatabase(): Promise<void> {
           description TEXT,
           available INTEGER DEFAULT 1,
           category TEXT,
+          show_on_web INTEGER DEFAULT 1,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -165,6 +166,16 @@ export async function initializeDatabase(): Promise<void> {
         }
       });
 
+      // Ensure geckos table has show_on_web column
+      db.all("PRAGMA table_info(geckos)", [], (err, columns: any[]) => {
+        if (!err) {
+          const hasShowOnWeb = columns.some(col => col.name === 'show_on_web');
+          if (!hasShowOnWeb) {
+            db.run('ALTER TABLE geckos ADD COLUMN show_on_web INTEGER DEFAULT 1');
+          }
+        }
+      });
+
       // Insert default settings if not exists
       const defaultSettings = [
         { key: 'show_language_selector', value: 'true', description: 'Show language selector in gecko-shop header' }
@@ -191,7 +202,7 @@ export async function initializeDatabase(): Promise<void> {
       ];
 
       initialCategories.forEach((cat) => {
-        db.get('SELECT * FROM categories WHERE id = ?', [cat.id], (err, row) => {
+        db.get('SELECT * FROM categories WHERE id = ?', [cat.id], (err, row: any) => {
           if (err) {
             console.error('Error checking category:', err);
             return;

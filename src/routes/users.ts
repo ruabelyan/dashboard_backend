@@ -341,7 +341,7 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
       db.run(
         'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
         [name, email, hashedPassword, role],
-        function(err) {
+        function (err) {
           if (err) {
             console.error('User creation error:', err);
             return res.status(500).json({ error: 'User creation failed' });
@@ -428,7 +428,7 @@ router.put('/:id', authenticateToken, requireAdmin, validateRequest(userUpdateSc
       updateUser();
     }
 
-    function updateUser() {
+    function updateUser(): void {
       const updateFields = [];
       const values = [];
 
@@ -446,7 +446,8 @@ router.put('/:id', authenticateToken, requireAdmin, validateRequest(userUpdateSc
       }
 
       if (updateFields.length === 0) {
-        return res.status(400).json({ error: 'No fields to update' });
+        res.status(400).json({ error: 'No fields to update' });
+        return;
       }
 
       updateFields.push('updated_at = CURRENT_TIMESTAMP');
@@ -455,7 +456,7 @@ router.put('/:id', authenticateToken, requireAdmin, validateRequest(userUpdateSc
       db.run(
         `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`,
         values,
-        function(err) {
+        function (err) {
           if (err) {
             console.error('User update error:', err);
             return res.status(500).json({ error: 'User update failed' });
@@ -511,7 +512,7 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
     return res.status(400).json({ error: 'Cannot delete your own account' });
   }
 
-  db.run('DELETE FROM users WHERE id = ?', [userId], function(err) {
+  db.run('DELETE FROM users WHERE id = ?', [userId], function (err) {
     if (err) {
       console.error('Database error:', err);
       return res.status(500).json({ error: 'Database error' });
@@ -533,7 +534,7 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-        file.mimetype === 'application/vnd.ms-excel') {
+      file.mimetype === 'application/vnd.ms-excel') {
       cb(null, true);
     } else {
       cb(new Error('Only Excel files are allowed'));
@@ -608,8 +609,8 @@ router.post('/import-excel', authenticateToken, requireAdmin, upload.single('fil
     const emailIndex = headers.findIndex(h => h.toLowerCase() === 'email');
 
     if (nameIndex === -1 || emailIndex === -1) {
-      return res.status(400).json({ 
-        error: 'Excel file must contain "name" and "email" columns' 
+      return res.status(400).json({
+        error: 'Excel file must contain "name" and "email" columns'
       });
     }
 
@@ -619,7 +620,7 @@ router.post('/import-excel', authenticateToken, requireAdmin, upload.single('fil
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i] as any[];
-      
+
       // Skip empty rows
       if (!row[nameIndex] && !row[emailIndex]) {
         continue;
@@ -678,7 +679,7 @@ router.post('/import-excel', authenticateToken, requireAdmin, upload.single('fil
           db.run(
             'INSERT INTO users (name, email, role, password, created_at) VALUES (?, ?, ?, ?, ?)',
             [user.name, user.email, user.role, user.password, user.created_at],
-            function(err) {
+            function (err) {
               if (err) reject(err);
               else resolve(this);
             }

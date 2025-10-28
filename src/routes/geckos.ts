@@ -86,15 +86,15 @@ router.get('/categories/all', (req, res) => {
  * Create a new gecko (admin only - would add auth middleware)
  */
 router.post('/', (req, res) => {
-    const { name, species, morph, price, image, age, gender, description, available, category } = req.body;
+    const { name, species, morph, price, image, age, gender, description, available, category, show_on_web } = req.body;
 
     if (!name || !species || !price) {
         return res.status(400).json({ error: 'Name, species, and price are required' });
     }
 
     db.run(
-        'INSERT INTO geckos (name, species, morph, price, image, age, gender, description, available, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [name, species, morph, price, image, age, gender, description, available || 1, category],
+        'INSERT INTO geckos (name, species, morph, price, image, age, gender, description, available, category, show_on_web) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [name, species, morph, price, image, age, gender, description, available || 1, category, show_on_web !== undefined ? show_on_web : 1],
         function (err) {
             if (err) {
                 console.error('Database error:', err);
@@ -118,7 +118,7 @@ router.post('/', (req, res) => {
  */
 router.put('/:id', (req, res) => {
     const { id } = req.params;
-    const { name, species, morph, price, image, age, gender, description, available, category } = req.body;
+    const { name, species, morph, price, image, age, gender, description, available, category, show_on_web } = req.body;
 
     db.get('SELECT * FROM geckos WHERE id = ?', [id], (err, gecko: any) => {
         if (err) {
@@ -131,7 +131,7 @@ router.put('/:id', (req, res) => {
         }
 
         db.run(
-            'UPDATE geckos SET name = ?, species = ?, morph = ?, price = ?, image = ?, age = ?, gender = ?, description = ?, available = ?, category = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            'UPDATE geckos SET name = ?, species = ?, morph = ?, price = ?, image = ?, age = ?, gender = ?, description = ?, available = ?, category = ?, show_on_web = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
             [
                 name || gecko.name,
                 species || gecko.species,
@@ -143,6 +143,7 @@ router.put('/:id', (req, res) => {
                 description !== undefined ? description : gecko.description,
                 available !== undefined ? available : gecko.available,
                 category !== undefined ? category : gecko.category,
+                show_on_web !== undefined ? show_on_web : (gecko as any).show_on_web,
                 id
             ],
             (err) => {

@@ -65,11 +65,11 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 // Middleware
-app.use(helmet());
-app.use(compression());
-app.use(morgan('combined'));
+app.use(helmet() as unknown as express.RequestHandler);
+app.use(compression() as unknown as express.RequestHandler);
+app.use(morgan('combined') as unknown as express.RequestHandler);
 app.use(cors({
-  origin: function (origin, callback) {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
@@ -109,7 +109,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Swagger documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/api-docs', swaggerUi.serve as unknown as express.RequestHandler, swaggerUi.setup(swaggerSpec) as unknown as express.RequestHandler);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -201,7 +201,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 });
 
 // 404 handler
-app.use('*', (req, res) => {
+app.use('*', (req: Request, res: Response) => {
   res.status(404).json({
     error: 'Route not found',
     message: `Cannot ${req.method} ${req.originalUrl}`
