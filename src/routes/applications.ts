@@ -1,5 +1,5 @@
 import express from 'express';
-import { db } from '../database/init.js';
+import { dbAll, dbGet, dbRun } from '../database/db.js';
 import { authenticateToken, type AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -7,52 +7,39 @@ const router = express.Router();
 /**
  * Get all applications for the authenticated user
  */
-router.get('/', authenticateToken, (req: AuthRequest, res) => {
+router.get('/', authenticateToken, async (req: AuthRequest, res) => {
     const userId = req.user?.id;
-
-    db.all(
-        'SELECT * FROM applications WHERE user_id = ? ORDER BY created_at DESC',
-        [userId],
-        (err, applications) => {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
-
-            res.json({ applications });
-        }
-    );
+    try {
+        const applications = await dbAll('SELECT * FROM applications WHERE user_id = ? ORDER BY created_at DESC', [userId]);
+        res.json({ applications });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 /**
  * Get a specific application
  */
-router.get('/:id', authenticateToken, (req: AuthRequest, res) => {
+router.get('/:id', authenticateToken, async (req: AuthRequest, res) => {
     const { id } = req.params;
     const userId = req.user?.id;
-
-    db.get(
-        'SELECT * FROM applications WHERE id = ? AND user_id = ?',
-        [id, userId],
-        (err, application) => {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
-
-            if (!application) {
-                return res.status(404).json({ error: 'Application not found' });
-            }
-
-            res.json({ application });
+    try {
+        const application = await dbGet('SELECT * FROM applications WHERE id = ? AND user_id = ?', [id, userId]);
+        if (!application) {
+            return res.status(404).json({ error: 'Application not found' });
         }
-    );
+        res.json({ application });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 /**
  * Create a new application
  */
-router.post('/', authenticateToken, (req: AuthRequest, res) => {
+router.post('/', authenticateToken, async (req: AuthRequest, res) => {
     const userId = req.user?.id;
     const { name, description, type, path, url, domain } = req.body;
 
@@ -60,158 +47,113 @@ router.post('/', authenticateToken, (req: AuthRequest, res) => {
         return res.status(400).json({ error: 'Name is required' });
     }
 
-    db.run(
-        'INSERT INTO applications (user_id, name, description, type, path, url, domain) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [userId, name, description, type || 'react', path, url, domain],
-        function (err) {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Failed to create application' });
-            }
-
-            db.get('SELECT * FROM applications WHERE id = ?', [this.lastID], (err, application) => {
-                if (err) {
-                    console.error('Database error:', err);
-                    return res.status(500).json({ error: 'Database error' });
-                }
-
-                res.status(201).json({ application });
-            });
-        }
-    );
+    try {
+        const result = await dbRun('INSERT INTO applications (user_id, name, description, type, path, url, domain) VALUES (?, ?, ?, ?, ?, ?, ?)', [userId, name, description, type || 'react', path, url, domain]);
+        const application = result.lastID
+            ? await dbGet('SELECT * FROM applications WHERE id = ?', [result.lastID])
+            : await dbGet('SELECT * FROM applications WHERE user_id = ? ORDER BY id DESC LIMIT 1', [userId]);
+        res.status(201).json({ application });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Failed to create application' });
+    }
 });
 
 /**
  * Update an application
  */
-router.put('/:id', authenticateToken, (req: AuthRequest, res) => {
+router.put('/:id', authenticateToken, async (req: AuthRequest, res) => {
     const { id } = req.params;
     const userId = req.user?.id;
-    const { name, description, type, status, path, url, domain } = req.body;
+    const { name, description, type, status, path, url, domain, leader_id } = req.body;
 
-    db.get('SELECT * FROM applications WHERE id = ? AND user_id = ?', [id, userId], (err, app: any) => {
-        if (err) {
-            console.error('Database error:', err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-
+    try {
+        const app: any = await dbGet('SELECT * FROM applications WHERE id = ? AND user_id = ?', [id, userId]);
         if (!app) {
             return res.status(404).json({ error: 'Application not found' });
         }
 
-        db.run(
-            'UPDATE applications SET name = ?, description = ?, type = ?, status = ?, path = ?, url = ?, domain = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
-            [name || app.name, description !== undefined ? description : app.description, type || app.type, status || app.status, path, url, domain, id, userId],
-            (err) => {
-                if (err) {
-                    console.error('Database error:', err);
-                    return res.status(500).json({ error: 'Failed to update application' });
-                }
-
-                db.get('SELECT * FROM applications WHERE id = ?', [id], (err, application) => {
-                    if (err) {
-                        console.error('Database error:', err);
-                        return res.status(500).json({ error: 'Database error' });
-                    }
-
-                    res.json({ application });
-                });
-            }
+        await dbRun(
+            'UPDATE applications SET name = ?, description = ?, type = ?, status = ?, path = ?, url = ?, domain = ?, leader_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
+            [name || app.name, description !== undefined ? description : app.description, type || app.type, status || app.status, path, url, domain, leader_id !== undefined ? leader_id : app.leader_id, id, userId]
         );
-    });
+
+        const application = await dbGet('SELECT * FROM applications WHERE id = ?', [id]);
+        res.json({ application });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Failed to update application' });
+    }
 });
 
 /**
  * Delete an application
  */
-router.delete('/:id', authenticateToken, (req: AuthRequest, res) => {
+router.delete('/:id', authenticateToken, async (req: AuthRequest, res) => {
     const { id } = req.params;
     const userId = req.user?.id;
 
-    db.get('SELECT * FROM applications WHERE id = ? AND user_id = ?', [id, userId], (err, app: any) => {
-        if (err) {
-            console.error('Database error:', err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-
+    try {
+        const app = await dbGet('SELECT * FROM applications WHERE id = ? AND user_id = ?', [id, userId]);
         if (!app) {
             return res.status(404).json({ error: 'Application not found' });
         }
 
-        db.run('DELETE FROM applications WHERE id = ? AND user_id = ?', [id, userId], (err) => {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Failed to delete application' });
-            }
-
-            res.json({ message: 'Application deleted successfully' });
-        });
-    });
+        await dbRun('DELETE FROM applications WHERE id = ? AND user_id = ?', [id, userId]);
+        res.json({ message: 'Application deleted successfully' });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Failed to delete application' });
+    }
 });
 
 /**
  * Get all projects for a specific application
  */
-router.get('/:id/projects', authenticateToken, (req: AuthRequest, res) => {
+router.get('/:id/projects', authenticateToken, async (req: AuthRequest, res) => {
     const { id } = req.params;
     const userId = req.user?.id;
 
-    // Check if application exists and belongs to user
-    db.get('SELECT * FROM applications WHERE id = ? AND user_id = ?', [id, userId], (err, application) => {
-        if (err) {
-            console.error('Database error:', err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-
+    try {
+        const application = await dbGet('SELECT * FROM applications WHERE id = ? AND user_id = ?', [id, userId]);
         if (!application) {
             return res.status(404).json({ error: 'Application not found' });
         }
 
-        // Get projects for this application
-        db.all(
-            'SELECT * FROM projects WHERE application_id = ? ORDER BY created_at DESC',
-            [id],
-            (err, projects) => {
-                if (err) {
-                    console.error('Database error:', err);
-                    return res.status(500).json({ error: 'Database error' });
-                }
-
-                res.json({ projects: projects || [] });
-            }
-        );
-    });
+        const projects = await dbAll('SELECT * FROM projects WHERE application_id = ? ORDER BY created_at DESC', [id]);
+        res.json({ projects: projects || [] });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 /**
  * Get a specific project
  */
-router.get('/:id/projects/:projectId', authenticateToken, (req: AuthRequest, res) => {
+router.get('/:id/projects/:projectId', authenticateToken, async (req: AuthRequest, res) => {
     const { id, projectId } = req.params;
     const userId = req.user?.id;
 
-    db.get(
-        'SELECT p.* FROM projects p INNER JOIN applications a ON p.application_id = a.id WHERE p.id = ? AND p.application_id = ? AND a.user_id = ?',
-        [projectId, id, userId],
-        (err, project) => {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
-
-            if (!project) {
-                return res.status(404).json({ error: 'Project not found' });
-            }
-
-            res.json({ project });
+    try {
+        const project = await dbGet(
+            'SELECT p.* FROM projects p INNER JOIN applications a ON p.application_id = a.id WHERE p.id = ? AND p.application_id = ? AND a.user_id = ?',
+            [projectId, id, userId]
+        );
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
         }
-    );
+        res.json({ project });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 /**
  * Create a new project
  */
-router.post('/:id/projects', authenticateToken, (req: AuthRequest, res) => {
+router.post('/:id/projects', authenticateToken, async (req: AuthRequest, res) => {
     const { id } = req.params;
     const userId = req.user?.id;
     const { name, version, description, path, url } = req.body;
@@ -220,113 +162,78 @@ router.post('/:id/projects', authenticateToken, (req: AuthRequest, res) => {
         return res.status(400).json({ error: 'Name is required' });
     }
 
-    // Check if application exists and belongs to user
-    db.get('SELECT * FROM applications WHERE id = ? AND user_id = ?', [id, userId], (err, application) => {
-        if (err) {
-            console.error('Database error:', err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-
+    try {
+        const application = await dbGet('SELECT * FROM applications WHERE id = ? AND user_id = ?', [id, userId]);
         if (!application) {
             return res.status(404).json({ error: 'Application not found' });
         }
 
-        db.run(
+        const result = await dbRun(
             'INSERT INTO projects (application_id, name, version, description, path, url, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [id, name, version || '1.0.0', description, path, url, 'active'],
-            function (err) {
-                if (err) {
-                    console.error('Database error:', err);
-                    return res.status(500).json({ error: 'Failed to create project' });
-                }
-
-                db.get('SELECT * FROM projects WHERE id = ?', [this.lastID], (err, project) => {
-                    if (err) {
-                        console.error('Database error:', err);
-                        return res.status(500).json({ error: 'Database error' });
-                    }
-
-                    res.status(201).json({ project });
-                });
-            }
+            [id, name, version || '1.0.0', description, path, url, 'active']
         );
-    });
+        const project = result.lastID
+            ? await dbGet('SELECT * FROM projects WHERE id = ?', [result.lastID])
+            : await dbGet('SELECT * FROM projects WHERE application_id = ? ORDER BY id DESC LIMIT 1', [id]);
+        res.status(201).json({ project });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Failed to create project' });
+    }
 });
 
 /**
  * Update a project
  */
-router.put('/:id/projects/:projectId', authenticateToken, (req: AuthRequest, res) => {
+router.put('/:id/projects/:projectId', authenticateToken, async (req: AuthRequest, res) => {
     const { id, projectId } = req.params;
     const userId = req.user?.id;
     const { name, version, description, status, path, url } = req.body;
 
-    db.get(
-        'SELECT p.* FROM projects p INNER JOIN applications a ON p.application_id = a.id WHERE p.id = ? AND p.application_id = ? AND a.user_id = ?',
-        [projectId, id, userId],
-        (err, project) => {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
-
-            if (!project) {
-                return res.status(404).json({ error: 'Project not found' });
-            }
-
-            db.run(
-                'UPDATE projects SET name = ?, version = ?, description = ?, status = ?, path = ?, url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                [name || (project as any).name, version || (project as any).version, description !== undefined ? description : (project as any).description, status || (project as any).status, path, url, projectId],
-                (err) => {
-                    if (err) {
-                        console.error('Database error:', err);
-                        return res.status(500).json({ error: 'Failed to update project' });
-                    }
-
-                    db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, updatedProject) => {
-                        if (err) {
-                            console.error('Database error:', err);
-                            return res.status(500).json({ error: 'Database error' });
-                        }
-
-                        res.json({ project: updatedProject });
-                    });
-                }
-            );
+    try {
+        const project: any = await dbGet(
+            'SELECT p.* FROM projects p INNER JOIN applications a ON p.application_id = a.id WHERE p.id = ? AND p.application_id = ? AND a.user_id = ?',
+            [projectId, id, userId]
+        );
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
         }
-    );
+
+        await dbRun(
+            'UPDATE projects SET name = ?, version = ?, description = ?, status = ?, path = ?, url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [name || project.name, version || project.version, description !== undefined ? description : project.description, status || project.status, path, url, projectId]
+        );
+
+        const updatedProject = await dbGet('SELECT * FROM projects WHERE id = ?', [projectId]);
+        res.json({ project: updatedProject });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Failed to update project' });
+    }
 });
 
 /**
  * Delete a project
  */
-router.delete('/:id/projects/:projectId', authenticateToken, (req: AuthRequest, res) => {
+router.delete('/:id/projects/:projectId', authenticateToken, async (req: AuthRequest, res) => {
     const { id, projectId } = req.params;
     const userId = req.user?.id;
 
-    db.get(
-        'SELECT p.* FROM projects p INNER JOIN applications a ON p.application_id = a.id WHERE p.id = ? AND p.application_id = ? AND a.user_id = ?',
-        [projectId, id, userId],
-        (err, project) => {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Database error' });
-            }
-
-            if (!project) {
-                return res.status(404).json({ error: 'Project not found' });
-            }
-
-            db.run('DELETE FROM projects WHERE id = ?', [projectId], (err) => {
-                if (err) {
-                    console.error('Database error:', err);
-                    return res.status(500).json({ error: 'Failed to delete project' });
-                }
-
-                res.json({ message: 'Project deleted successfully' });
-            });
+    try {
+        const project = await dbGet(
+            'SELECT p.* FROM projects p INNER JOIN applications a ON p.application_id = a.id WHERE p.id = ? AND p.application_id = ? AND a.user_id = ?',
+            [projectId, id, userId]
+        );
+        if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
         }
-    );
+
+        await dbRun('DELETE FROM projects WHERE id = ?', [projectId]);
+        res.json({ message: 'Project deleted successfully' });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Failed to delete project' });
+    }
 });
 
 export default router;

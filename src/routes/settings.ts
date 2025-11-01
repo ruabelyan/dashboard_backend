@@ -1,18 +1,14 @@
 import express from 'express';
-import { db } from '../database/init.js';
+import { dbAll, dbGet, dbRun } from '../database/db.js';
 
 const router = express.Router();
 
 /**
  * Get all settings
  */
-router.get('/', (req, res) => {
-    db.all('SELECT * FROM settings ORDER BY key ASC', [], (err, rows: any[]) => {
-        if (err) {
-            console.error('Database error:', err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-
+router.get('/', async (req, res) => {
+    try {
+        const rows: any[] = await dbAll('SELECT * FROM settings ORDER BY key ASC', []);
         const settings: any = {};
         rows.forEach(row => {
             settings[row.key] = {
@@ -20,39 +16,38 @@ router.get('/', (req, res) => {
                 description: row.description
             };
         });
-
         res.json({ settings });
-    });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 /**
  * Get a specific setting
  */
-router.get('/:key', (req, res) => {
+router.get('/:key', async (req, res) => {
     const { key } = req.params;
-
-    db.get('SELECT * FROM settings WHERE key = ?', [key], (err, row: any) => {
-        if (err) {
-            console.error('Database error:', err);
-            return res.status(500).json({ error: 'Database error' });
-        }
-
+    try {
+        const row: any = await dbGet('SELECT * FROM settings WHERE key = ?', [key]);
         if (!row) {
             return res.status(404).json({ error: 'Setting not found' });
         }
-
         res.json({
             key: row.key,
             value: row.value === 'true',
             description: row.description
         });
-    });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 /**
  * Update a setting
  */
-router.put('/:key', (req, res) => {
+router.put('/:key', async (req, res) => {
     const { key } = req.params;
     const { value } = req.body;
 
@@ -60,22 +55,19 @@ router.put('/:key', (req, res) => {
         return res.status(400).json({ error: 'Value must be a boolean' });
     }
 
-    db.run(
-        'UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?',
-        [value.toString(), key],
-        function (err) {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Failed to update setting' });
-            }
-
-            if (this.changes === 0) {
-                return res.status(404).json({ error: 'Setting not found' });
-            }
-
-            res.json({ key, value, message: 'Setting updated successfully' });
+    try {
+        // Check if setting exists, if not create it
+        const existing = await dbGet('SELECT * FROM settings WHERE key = ?', [key]);
+        if (!existing) {
+            await dbRun('INSERT INTO settings (key, value) VALUES (?, ?)', [key, value.toString()]);
+        } else {
+            await dbRun('UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?', [value.toString(), key]);
         }
-    );
+        res.json({ key, value, message: 'Setting updated successfully' });
+    } catch (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: 'Failed to update setting' });
+    }
 });
 
 export default router;

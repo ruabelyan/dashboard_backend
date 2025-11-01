@@ -20,6 +20,7 @@ import settingsRoutes from './routes/settings.js';
 
 // Import database initialization
 import { initializeDatabase } from './database/init.js';
+import { initializePostgres } from './database/postgres.js';
 
 // Load environment variables
 dotenv.config({ path: './config.env' });
@@ -216,13 +217,22 @@ app.use('*', (req: Request, res: Response) => {
 // Initialize database and start server
 async function startServer() {
   try {
-    await initializeDatabase();
-    console.log('Database initialized successfully');
+    const dbType = (process.env.DB_TYPE || '').toLowerCase();
+    if (dbType === 'postgres') {
+      console.log('Initializing PostgreSQL database...');
+      await initializePostgres();
+      console.log('PostgreSQL database initialized successfully');
+    } else {
+      console.log('Initializing SQLite database...');
+      await initializeDatabase();
+      console.log('SQLite database initialized successfully');
+    }
 
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
       console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
+      console.log(`🗄️  Database Type: ${dbType === 'postgres' ? 'PostgreSQL' : 'SQLite'}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
